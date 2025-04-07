@@ -1,5 +1,5 @@
-import json
 import os
+import json
 import google.generativeai as genai
 import numpy as np
 import spacy
@@ -9,14 +9,35 @@ from flask import Flask, request, jsonify
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
+import secrets
 
+# Load environment variables
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+# Configure Generative AI
 genai.configure(api_key=GEMINI_API_KEY)
 
+# Flask App
 app = Flask(__name__)
 
+# Download & Extract Model if Not Exists
+MODEL_DIR = "all-MiniLM-L6-v2"
+GDRIVE_FILE_ID = "1yQTnfOqAzynnAE7JNt0YJOxPrai37VaE"
+MODEL_ZIP = "model.zip"
+
+if not os.path.exists(MODEL_DIR):
+    print("Downloading model from Google Drive...")
+    os.system(f"wget --no-check-certificate 'https://drive.google.com/uc?export=download&id={GDRIVE_FILE_ID}' -O {MODEL_ZIP}")
+    os.system(f"unzip {MODEL_ZIP} && rm {MODEL_ZIP}")
+
+# Load SentenceTransformer Model
+bert_model = SentenceTransformer(MODEL_DIR)
+
+# Load NLP Model
+nlp = spacy.load("en_core_web_sm")
+
+# SHL Assessments Data
 shl_assessments = [
     {
         "id": "SHL001",
@@ -32,64 +53,19 @@ shl_assessments = [
         "url": "https://www.shl.com/products/verify-cognitive/",
         "remote_testing": True,
         "adaptive_support": True
-    },
-    {
-        "id": "SHL002",
-        "name": "OPQ32 Personality Test",
-        "description": "Occupational Personality Questionnaire measuring 32 personality traits",
-        "type": "Personality",
-        "tags": ["personality", "behavior", "traits"],
-        "target_roles": ["All"],
-        "target_industries": ["All"],
-        "difficulty_level": "All",
-        "duration_minutes": 30,
-        "languages": ["English", "Spanish", "German", "French"],
-        "url": "https://www.shl.com/products/opq32/",
-        "remote_testing": True,
-        "adaptive_support": False
-    },
-    {
-        "id": "SHL003",
-        "name": "Numerical Reasoning Test",
-        "description": "Assesses numerical data interpretation skills",
-        "type": "Cognitive Ability",
-        "tags": ["numerical", "math", "data analysis"],
-        "target_roles": ["Analyst", "Finance", "Consulting"],
-        "target_industries": ["Finance", "Consulting"],
-        "difficulty_level": "Advanced",
-        "duration_minutes": 35,
-        "languages": ["English", "Spanish"],
-        "url": "https://www.shl.com/products/numerical-reasoning/",
-        "remote_testing": True,
-        "adaptive_support": True
-    },
-    {
-        "id": "SHL004",
-        "name": "Situational Judgment Test",
-        "description": "Evaluates decision-making and problem-solving in workplace scenarios",
-        "type": "Behavioral",
-        "tags": ["decision-making", "problem-solving", "workplace"],
-        "target_roles": ["Manager", "Team Lead"],
-        "target_industries": ["All"],
-        "difficulty_level": "Intermediate",
-        "duration_minutes": 30,
-        "languages": ["English"],
-        "url": "https://www.shl.com/products/sjt/",
-        "remote_testing": True,
-        "adaptive_support": False
     }
 ]
 
-bert_model = SentenceTransformer("all-MiniLM-L6-v2")
-nlp = spacy.load("en_core_web_sm")
-
+# Encode SHL Assessments
 assessment_texts = [a["name"] + " " + a["description"] for a in shl_assessments]
 assessment_vectors = bert_model.encode(assessment_texts)
 
+# Extract Keywords from Job Description
 def extract_keywords(text):
     doc = nlp(text)
     return [token.lemma_.lower() for token in doc if token.is_alpha and not token.is_stop]
 
+# Analyze Job Description with GPT
 def analyze_with_gpt(job_description):
     try:
         model = genai.GenerativeModel("gemini-1.5-pro-latest")
@@ -99,6 +75,7 @@ def analyze_with_gpt(job_description):
     except Exception as e:
         return f"AI Analysis Failed: {str(e)}"
 
+# Flask API for Recommendations
 @app.route('/recommend', methods=['POST'])
 def recommend():
     data = request.json
@@ -118,6 +95,7 @@ def recommend():
                        } for i in ranked_indices]
     return jsonify({"recommendations": recommendations, "ai_analysis": ai_analysis, "keywords": keywords})
 
+# Streamlit Frontend
 def frontend():
     st.set_page_config(page_title="SHL Assessment Recommender", page_icon="🔍", layout="wide")
     st.title("🔍 SHL Assessment Recommendation System")
@@ -142,9 +120,11 @@ def frontend():
         else:
             st.error("❌ Error fetching recommendations. Please try again.")
 
+# Run Flask and Streamlit in Parallel
 if __name__ == '__main__':
     import threading
     from werkzeug.serving import run_simple
     flask_thread = threading.Thread(target=lambda: run_simple('127.0.0.1', 5000, app))
     flask_thread.start()
     frontend()
+
