@@ -11,17 +11,17 @@ from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
 import secrets
 
-# Load environment variables
+ 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Configure Generative AI
+
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Flask App
+
 app = Flask(__name__)
 
-# Download & Extract Model if Not Exists
+
 MODEL_DIR = "all-MiniLM-L6-v2"
 GDRIVE_FILE_ID = "1yQTnfOqAzynnAE7JNt0YJOxPrai37VaE"
 MODEL_ZIP = "model.zip"
@@ -31,13 +31,13 @@ if not os.path.exists(MODEL_DIR):
     os.system(f"wget --no-check-certificate 'https://drive.google.com/uc?export=download&id={GDRIVE_FILE_ID}' -O {MODEL_ZIP}")
     os.system(f"unzip {MODEL_ZIP} && rm {MODEL_ZIP}")
 
-# Load SentenceTransformer Model
+
 bert_model = SentenceTransformer(MODEL_DIR)
 
-# Load NLP Model
+
 nlp = spacy.load("en_core_web_sm")
 
-# SHL Assessments Data
+
 shl_assessments = [
     {
         "id": "SHL001",
@@ -56,16 +56,16 @@ shl_assessments = [
     }
 ]
 
-# Encode SHL Assessments
+
 assessment_texts = [a["name"] + " " + a["description"] for a in shl_assessments]
 assessment_vectors = bert_model.encode(assessment_texts)
 
-# Extract Keywords from Job Description
+
 def extract_keywords(text):
     doc = nlp(text)
     return [token.lemma_.lower() for token in doc if token.is_alpha and not token.is_stop]
 
-# Analyze Job Description with GPT
+
 def analyze_with_gpt(job_description):
     try:
         model = genai.GenerativeModel("gemini-1.5-pro-latest")
@@ -75,7 +75,7 @@ def analyze_with_gpt(job_description):
     except Exception as e:
         return f"AI Analysis Failed: {str(e)}"
 
-# Flask API for Recommendations
+
 @app.route('/recommend', methods=['POST'])
 def recommend():
     data = request.json
@@ -95,7 +95,6 @@ def recommend():
                        } for i in ranked_indices]
     return jsonify({"recommendations": recommendations, "ai_analysis": ai_analysis, "keywords": keywords})
 
-# Streamlit Frontend
 def frontend():
     st.set_page_config(page_title="SHL Assessment Recommender", page_icon="🔍", layout="wide")
     st.title("🔍 SHL Assessment Recommendation System")
@@ -120,7 +119,7 @@ def frontend():
         else:
             st.error("❌ Error fetching recommendations. Please try again.")
 
-# Run Flask and Streamlit in Parallel
+
 if __name__ == '__main__':
     import threading
     from werkzeug.serving import run_simple
